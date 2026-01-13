@@ -7,7 +7,6 @@ RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built frontend
-COPY dist /usr/share/nginx/html/kiosk
-COPY logo.png /usr/share/nginx/html/kiosk/logo.png
+COPY dist /usr/share/nginx/html/admin
 
 EXPOSE 80

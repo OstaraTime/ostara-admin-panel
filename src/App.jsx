@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import keycloak from './keycloak'
 
 const API_BASE = 'http://ostara-rso.031268394.xyz/api'
+const QR_GENERATOR_URL = 'http://ostara-rso.031268394.xyz/generate_pdf'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('persons')
@@ -156,6 +157,8 @@ function KiosksTab() {
 function PersonsTab() {
   const [persons, setPersons] = useState([])
   const [depts, setDepts] = useState([])
+  const [selected, setSelected] = useState([])
+  const [action, setAction] = useState('generate_qr')
   const [form, setForm] = useState({ name: '', deptId: '' })
 
   const loadAll = async () => {
@@ -167,10 +170,9 @@ function PersonsTab() {
     setDepts(d)
   }
 
-  useEffect(() => {
-    loadAll()
-  }, [])
+  useEffect(() => { loadAll() }, [])
 
+  // Add person
   const submit = async (e) => {
     e.preventDefault()
     await fetch(`${API_BASE}/persons`, {
@@ -185,11 +187,80 @@ function PersonsTab() {
     loadAll()
   }
 
+  // Checkbox logic
+  const toggle = (id) => {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  const toggleAll = () => {
+    if (selected.length === persons.length) {
+      setSelected([])
+    } else {
+      setSelected(persons.map(p => p.personId))
+    }
+  }
+
+  // Bulk RUN
+  const runAction = async () => {
+    if (!selected.length) return alert('Select at least one person')
+
+    if (action === 'generate_qr') {
+      const csvRes = await fetch(`${API_BASE}/persons/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selected),
+      })
+      const csvText = await csvRes.text()
+
+      const blob = new Blob([csvText], { type: 'text/csv' })
+      const formData = new FormData()
+      formData.append('file', blob, 'persons.csv')
+
+      const pdfRes = await fetch(
+        '${QR_GENERATOR_URL}',
+        { method: 'POST', body: formData }
+      )
+
+      const pdfBlob = await pdfRes.blob()
+
+      const url = window.URL.createObjectURL(pdfBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'qr-codes.pdf'
+      a.click()
+      window.URL.revokeObjectURL(url)
+    }
+  }
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-4">Persons</h2>
 
-      {/* Add form */}
+      {/* Bulk actions */}
+      <div className="flex items-center gap-3 mb-4">
+        <select
+          className="border p-2 rounded"
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
+        >
+          <option value="generate_qr">Generate QR codes</option>
+        </select>
+
+        <button
+          onClick={runAction}
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          RUN
+        </button>
+
+        <span className="text-sm text-gray-600">
+          {selected.length} selected
+        </span>
+      </div>
+
+      {/* Add person form */}
       <form onSubmit={submit} className="flex gap-2 mb-6">
         <input
           className="border p-2 rounded w-1/3"
@@ -205,9 +276,7 @@ function PersonsTab() {
         >
           <option value="">Select department</option>
           {depts.map((d) => (
-            <option key={d.deptId} value={d.deptId}>
-              {d.name}
-            </option>
+            <option key={d.deptId} value={d.deptId}>{d.name}</option>
           ))}
         </select>
 
@@ -216,10 +285,17 @@ function PersonsTab() {
         </button>
       </form>
 
-      {/* Table */}
+      {/* Persons table */}
       <table className="w-full bg-white rounded shadow">
         <thead className="bg-gray-100">
           <tr>
+            <th className="p-2">
+              <input
+                type="checkbox"
+                checked={selected.length === persons.length && persons.length > 0}
+                onChange={toggleAll}
+              />
+            </th>
             <th className="p-2 text-left">ID</th>
             <th className="p-2 text-left">Name</th>
             <th className="p-2 text-left">Department</th>
@@ -228,6 +304,13 @@ function PersonsTab() {
         <tbody>
           {persons.map((p) => (
             <tr key={p.personId} className="border-t">
+              <td className="p-2">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(p.personId)}
+                  onChange={() => toggle(p.personId)}
+                />
+              </td>
               <td className="p-2">{p.personId}</td>
               <td className="p-2">{p.name}</td>
               <td className="p-2">{p.dept.name}</td>

@@ -24,6 +24,9 @@ jobs:
           username: ${{ vars.DH_USER }}
           password: ${{ secrets.DH_PASS }}
 
+      - name: Build project
+        run: npm run build
+
       - name: Build image
         run: docker build -t ${{ vars.DH_REPO }}:${{ github.sha }} .
 
